@@ -49,7 +49,7 @@ check_tproxy_support() {
 
 setup_routing4() {
     log "Info" "设置 IPv4 路由规则..."
-    ip rule del fwmark "$MARK_VALUE" table "$TABLE_ID" 2>/dev/null || true
+    ip rule del fwmark "$MARK_VALUE" table "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
     ip route del local 0.0.0.0/0 dev lo table "$TABLE_ID" 2>/dev/null || true
     
     ip rule add fwmark "$MARK_VALUE" table "$TABLE_ID" pref "$TABLE_ID"
@@ -61,7 +61,7 @@ setup_routing4() {
 
 setup_routing6() {
     log "Info" "设置 IPv6 路由规则..."
-    ip -6 rule del fwmark "$MARK_VALUE6" table "$TABLE_ID" 2>/dev/null || true
+    ip -6 rule del fwmark "$MARK_VALUE6" table "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
     ip -6 route del local ::/0 dev lo table "$TABLE_ID" 2>/dev/null || true
     
     ip -6 rule add fwmark "$MARK_VALUE6" table "$TABLE_ID" pref "$TABLE_ID"
@@ -194,8 +194,13 @@ cleanup_tproxy_chain6() {
     log "Info" "IPv6 TPROXY 规则清理完成"
 }
 
+# 检查内核是否在运行
+is_core_running() {
+    ps -ef | grep -- 'Clash.Core -d' | grep -vE 'inotifyd|grep' > /dev/null 2>&1
+}
+
 start_core() {
-    if ! (ps -ef | grep -- 'Clash.Core -d' | grep -vE 'inotifyd|grep') > /dev/null ; then
+    if ! is_core_running; then
         nohup $Module_dir/Proxy/Clash.Core -d $Module_dir/Proxy > $sdcard_dir/内核日志.txt 2>&1 &
         sleep 2
         echo "Clash 内核已启动"
@@ -205,10 +210,14 @@ start_core() {
 }
 
 stop_core() {
-    if (ps -ef | grep -- 'Clash.Core -d' | grep -vE 'inotifyd|grep') > /dev/null ; then
-        pid=$(pgrep -f 'Clash.Core -d')
-        kill -15 $pid
-        echo "Clash 内核已关闭"
+    if is_core_running; then
+        pid=$(pgrep -f 'Clash.Core -d' 2>/dev/null | head -n 1)
+        if [ -n "$pid" ]; then
+            kill -15 $pid 2>/dev/null
+            echo "Clash 内核已关闭"
+        else
+            echo "无法获取内核进程 ID"
+        fi
     else
         echo "Clash 内核未在运行"
     fi
