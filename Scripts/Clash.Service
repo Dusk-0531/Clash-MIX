@@ -41,8 +41,17 @@ case "$1" in
     stop)
         stop
         ;;
+    restart)
+        stop
+        sleep 2
+        start
+        echo "Clash内核已重启"
+        ;;
     *)
-        echo "只能使用start|stop两个参数控制内核启动或停止"
+        echo "使用方法: $0 {start|stop|restart}"
+        echo "  start   - 启动 Clash 内核 (TUN 模式)"
+        echo "  stop    - 停止 Clash 内核"
+        echo "  restart - 重启 Clash 内核"
         exit 1
         ;;
 esac

@@ -1,0 +1,36 @@
+# Clash-MIX TPROXY 配置文件
+# 注意: 本文件为可选配置，不设置时使用默认值
+# 请根据需要修改后保存
+
+# ========== 端口配置 ==========
+# TPROXY 监听端口 (需与 Clash 配置中的 tproxy-port 一致)
+PROXY_TCP_PORT=7893
+PROXY_UDP_PORT=7893
+
+# DNS 端口 (需与 Clash 配置中的 dns.listen 一致)
+DNS_PORT=1053
+
+# ========== 协议开关 ==========
+# 是否代理 TCP 流量 (1=启用, 0=禁用)
+PROXY_TCP=1
+
+# 是否代理 UDP 流量 (1=启用, 0=禁用)
+PROXY_UDP=1
+
+# 是否代理 IPv6 流量 (1=启用, 0=禁用)
+PROXY_IPV6=1
+
+# 是否启用 DNS 劫持 (1=启用, 0=禁用)
+DNS_HIJACK_ENABLE=1
+
+# ========== 高级配置 ==========
+# 路由标记值 (一般无需修改)
+MARK_VALUE=20
+MARK_VALUE6=25
+
+# 路由表 ID (一般无需修改)
+TABLE_ID=2025
+
+# 接口定义 (可根据设备调整)
+MOBILE_INTERFACE=rmnet_data+
+WIFI_INTERFACE=wlan0
