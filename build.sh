@@ -19,7 +19,7 @@ fi
 
 for field in MODULE_ID VERSION VERSION_CODE; do
   value="${!field}"
-  if ! [[ "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  if ! [[ "$value" =~ ^[A-Za-z0-9._+-]+$ ]]; then
     echo "Invalid value for $field: $value"
     exit 1
   fi
@@ -39,5 +39,8 @@ zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . \
      ".gitignore" \
      ".vscode/*" \
      ".idea/*" \
-     "tests/*"
+     "tests/*" \
+     ".DS_Store" \
+     "node_modules/*" \
+     "__pycache__/*"
 echo "Package created: $OUTPUT_DIR/$ZIP_NAME"
