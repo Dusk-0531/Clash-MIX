@@ -65,7 +65,7 @@ if [ -f "$ROOT_DIR/.buildignore" ]; then
     case "$line" in
       \#*) continue ;;
     esac
-    if [[ "$line" == /* || "$line" == ../* || "$line" == */../* || "$line" =~ // || "$line" == ~* ]]; then
+    if [[ "$line" == /* || "$line" == ../* || "$line" == */../* || "$line" == *//* || "$line" == ~* ]]; then
       echo "Invalid .buildignore entry: $line"
       exit 1
     fi
@@ -79,5 +79,9 @@ if [ ${#EXCLUDES[@]} -gt 0 ]; then
   ZIP_ARGS+=("-x" "${EXCLUDES[@]}")
 fi
 
-zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . "${ZIP_ARGS[@]}"
+if [ ${#ZIP_ARGS[@]} -gt 0 ]; then
+  zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . "${ZIP_ARGS[@]}"
+else
+  zip -r9 "$OUTPUT_DIR/$ZIP_NAME" .
+fi
 echo "Package created: $OUTPUT_DIR/$ZIP_NAME"
