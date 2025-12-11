@@ -103,8 +103,8 @@ setup_tproxy_chain4() {
     
     # DNS 劫持
     if [ "$DNS_HIJACK_ENABLE" -eq 1 ]; then
-        iptables -t mangle -A CLASH_PREROUTING -p tcp --dport 53 -j TPROXY --on-port "$PROXY_TCP_PORT" --tproxy-mark "$MARK_VALUE"
-        iptables -t mangle -A CLASH_PREROUTING -p udp --dport 53 -j TPROXY --on-port "$PROXY_UDP_PORT" --tproxy-mark "$MARK_VALUE"
+        iptables -t mangle -A CLASH_PREROUTING -p tcp --dport 53 -j TPROXY --on-port "$DNS_PORT" --tproxy-mark "$MARK_VALUE"
+        iptables -t mangle -A CLASH_PREROUTING -p udp --dport 53 -j TPROXY --on-port "$DNS_PORT" --tproxy-mark "$MARK_VALUE"
         iptables -t mangle -A CLASH_OUTPUT -p tcp --dport 53 -j MARK --set-mark "$MARK_VALUE"
         iptables -t mangle -A CLASH_OUTPUT -p udp --dport 53 -j MARK --set-mark "$MARK_VALUE"
     fi
@@ -143,8 +143,8 @@ setup_tproxy_chain6() {
     
     # DNS 劫持
     if [ "$DNS_HIJACK_ENABLE" -eq 1 ]; then
-        ip6tables -t mangle -A CLASH_PREROUTING -p tcp --dport 53 -j TPROXY --on-port "$PROXY_TCP_PORT" --tproxy-mark "$MARK_VALUE6"
-        ip6tables -t mangle -A CLASH_PREROUTING -p udp --dport 53 -j TPROXY --on-port "$PROXY_UDP_PORT" --tproxy-mark "$MARK_VALUE6"
+        ip6tables -t mangle -A CLASH_PREROUTING -p tcp --dport 53 -j TPROXY --on-port "$DNS_PORT" --tproxy-mark "$MARK_VALUE6"
+        ip6tables -t mangle -A CLASH_PREROUTING -p udp --dport 53 -j TPROXY --on-port "$DNS_PORT" --tproxy-mark "$MARK_VALUE6"
         ip6tables -t mangle -A CLASH_OUTPUT -p tcp --dport 53 -j MARK --set-mark "$MARK_VALUE6"
         ip6tables -t mangle -A CLASH_OUTPUT -p udp --dport 53 -j MARK --set-mark "$MARK_VALUE6"
     fi
