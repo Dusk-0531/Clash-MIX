@@ -1,0 +1,37 @@
+name: Build Magisk module
+
+on:
+  push:
+    branches: ["main", "master"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build package
+        run: bash ./build.sh
+
+      - name: Capture package info
+        id: package
+        run: |
+          ZIP_PATH=$(ls out/*.zip)
+          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$(basename "$ZIP_PATH" .zip)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: ${{ steps.package.outputs.zip_path }}
+          if-no-files-found: error
