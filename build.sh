@@ -19,7 +19,7 @@ fi
 
 for field in MODULE_ID VERSION VERSION_CODE; do
   value="${!field}"
-  if [[ "$value" =~ [^A-Za-z0-9._-] ]]; then
+  if [[ "$value" =~ [^A-Za-z0-9._+-] ]]; then
     echo "Invalid value for $field: $value"
     exit 1
   fi
@@ -59,9 +59,5 @@ if [ -f "$ROOT_DIR/.buildignore" ]; then
 fi
 
 echo "Building Magisk module package..."
-if [ ${#EXCLUDES[@]} -gt 0 ]; then
-  zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . -x "${EXCLUDES[@]}"
-else
-  zip -r9 "$OUTPUT_DIR/$ZIP_NAME" .
-fi
+zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . -x "${EXCLUDES[@]}"
 echo "Package created: $OUTPUT_DIR/$ZIP_NAME"
