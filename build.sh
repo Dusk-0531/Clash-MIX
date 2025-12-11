@@ -17,10 +17,11 @@ if [ -z "$MODULE_ID" ] || [ -z "$VERSION" ] || [ -z "$VERSION_CODE" ]; then
   exit 1
 fi
 
+ALLOWED_PATTERN="letters, digits, dot, underscore, hyphen, and plus sign"
 for field in MODULE_ID VERSION VERSION_CODE; do
   value="${!field}"
   if [[ "$value" =~ [^A-Za-z0-9._+-] ]]; then
-    echo "Invalid value for $field: $value"
+    echo "Invalid value for $field: $value (allowed: $ALLOWED_PATTERN)"
     exit 1
   fi
 done
@@ -50,7 +51,7 @@ if [ -f "$ROOT_DIR/.buildignore" ]; then
     case "$line" in
       \#*) continue ;;
     esac
-    if [[ "$line" == /* || "$line" == *..* ]]; then
+    if [[ "$line" == /* || "$line" == *..* || "$line" == *//* || "$line" == ~* ]]; then
       echo "Invalid .buildignore entry: $line"
       exit 1
     fi
@@ -59,5 +60,5 @@ if [ -f "$ROOT_DIR/.buildignore" ]; then
 fi
 
 echo "Building Magisk module package..."
-zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . -x "${EXCLUDES[@]}"
+zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . ${EXCLUDES[@]:+"-x" "${EXCLUDES[@]}"}
 echo "Package created: $OUTPUT_DIR/$ZIP_NAME"
