@@ -9,6 +9,11 @@ if [ ! -f "$ROOT_DIR/module.prop" ]; then
   exit 1
 fi
 
+if ! command -v zip >/dev/null 2>&1; then
+  echo "zip command not found, aborting."
+  exit 1
+fi
+
 MODULE_ID="$(grep '^id=' "$ROOT_DIR/module.prop" | cut -d '=' -f2-)"
 VERSION="$(grep '^version=' "$ROOT_DIR/module.prop" | cut -d '=' -f2-)"
 VERSION_CODE="$(grep '^versionCode=' "$ROOT_DIR/module.prop" | cut -d '=' -f2-)"
@@ -60,7 +65,7 @@ if [ -f "$ROOT_DIR/.buildignore" ]; then
     case "$line" in
       \#*) continue ;;
     esac
-    if [[ "$line" == /* || "$line" == ../* || "$line" == */../* || "$line" == *//* || "$line" == ~* ]]; then
+    if [[ "$line" == /* || "$line" == ../* || "$line" == */../* || "$line" =~ // || "$line" == ~* ]]; then
       echo "Invalid .buildignore entry: $line"
       exit 1
     fi
