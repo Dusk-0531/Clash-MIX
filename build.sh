@@ -30,17 +30,30 @@ ZIP_NAME="${MODULE_ID}-${VERSION}-${VERSION_CODE}.zip"
 mkdir -p "$OUTPUT_DIR"
 cd "$ROOT_DIR"
 
+EXCLUDES=(
+  "*.git*"
+  "out/*"
+  "build.sh"
+  "*.md"
+  ".gitignore"
+  ".vscode/*"
+  ".idea/*"
+  "tests/*"
+  ".DS_Store"
+  "node_modules/*"
+  "__pycache__/*"
+)
+
+if [ -f "$ROOT_DIR/.buildignore" ]; then
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    case "$line" in
+      \#*) continue ;;
+    esac
+    EXCLUDES+=("$line")
+  done < "$ROOT_DIR/.buildignore"
+fi
+
 echo "Building Magisk module package..."
-zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . \
-  -x "*.git*" \
-     "out/*" \
-     "build.sh" \
-     "*.md" \
-     ".gitignore" \
-     ".vscode/*" \
-     ".idea/*" \
-     "tests/*" \
-     ".DS_Store" \
-     "node_modules/*" \
-     "__pycache__/*"
+zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . -x "${EXCLUDES[@]}"
 echo "Package created: $OUTPUT_DIR/$ZIP_NAME"
