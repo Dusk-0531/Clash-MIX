@@ -61,11 +61,11 @@ EXCLUDES=(
 
 if [ -f "$ROOT_DIR/.buildignore" ]; then
   while IFS= read -r line; do
-    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
     case "$line" in
       \#*) continue ;;
     esac
-    if [[ "$line" == /* || "$line" == ../* || "$line" == */../* || "$line" == *//* || "$line" == ~* || "$line" == '*/..'* ]]; then
+    if [[ "$line" == /* || "$line" == ../* || "$line" == */../* || "$line" == *../* || "$line" == *//* || "$line" == ~* || "$line" == '*/..'* || "$line" == .. ]]; then
       echo "Invalid .buildignore entry: $line"
       exit 1
     fi
@@ -74,6 +74,10 @@ if [ -f "$ROOT_DIR/.buildignore" ]; then
 fi
 
 echo "Building Magisk module package..."
-ZIP_ARGS=("-x" "${EXCLUDES[@]}")
+if [ ${#EXCLUDES[@]} -gt 0 ]; then
+  ZIP_ARGS=("-x" "${EXCLUDES[@]}")
+else
+  ZIP_ARGS=()
+fi
 zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . "${ZIP_ARGS[@]}"
 echo "Package created: $OUTPUT_DIR/$ZIP_NAME"
