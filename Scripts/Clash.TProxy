@@ -1,0 +1,294 @@
+#!/system/bin/sh
+# Clash-MIX TPROXY 模式脚本
+# 参考: https://github.com/CHIZI-0618/AndroidTProxyShell/blob/main/tproxy.sh
+
+Module_dir="/data/adb/modules/Clash"
+sdcard_dir="/sdcard/Android/Clash"
+config_file="$sdcard_dir/TProxy配置.txt"
+
+# 默认配置
+PROXY_TCP_PORT="${PROXY_TCP_PORT:-7893}"
+PROXY_UDP_PORT="${PROXY_UDP_PORT:-7893}"
+DNS_PORT="${DNS_PORT:-1053}"
+MARK_VALUE="${MARK_VALUE:-20}"
+MARK_VALUE6="${MARK_VALUE6:-25}"
+TABLE_ID="${TABLE_ID:-2025}"
+PROXY_IPV6="${PROXY_IPV6:-1}"
+PROXY_TCP="${PROXY_TCP:-1}"
+PROXY_UDP="${PROXY_UDP:-1}"
+DNS_HIJACK_ENABLE="${DNS_HIJACK_ENABLE:-1}"
+
+# 接口定义
+MOBILE_INTERFACE="${MOBILE_INTERFACE:-rmnet_data+}"
+WIFI_INTERFACE="${WIFI_INTERFACE:-wlan0}"
+
+# 加载用户配置
+load_config() {
+    if [ -f "$config_file" ]; then
+        . "$config_file"
+        echo "已加载 TProxy 配置: $config_file"
+    fi
+}
+
+log() {
+    local level="$1"
+    local message="$2"
+    local timestamp
+    timestamp="$(date +"%Y-%m-%d %H:%M:%S")"
+    echo "$timestamp [$level]: $message"
+}
+
+check_tproxy_support() {
+    if [ -f /proc/config.gz ]; then
+        if zcat /proc/config.gz 2>/dev/null | grep -qE "^CONFIG_NETFILTER_XT_TARGET_TPROXY=[ym]$"; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+setup_routing4() {
+    log "Info" "设置 IPv4 路由规则..."
+    ip rule del fwmark "$MARK_VALUE" table "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
+    ip route del local 0.0.0.0/0 dev lo table "$TABLE_ID" 2>/dev/null || true
+    
+    ip rule add fwmark "$MARK_VALUE" table "$TABLE_ID" pref "$TABLE_ID"
+    ip route add local 0.0.0.0/0 dev lo table "$TABLE_ID"
+    echo 1 > /proc/sys/net/ipv4/ip_forward
+    
+    log "Info" "IPv4 路由规则设置完成"
+}
+
+setup_routing6() {
+    log "Info" "设置 IPv6 路由规则..."
+    ip -6 rule del fwmark "$MARK_VALUE6" table "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
+    ip -6 route del local ::/0 dev lo table "$TABLE_ID" 2>/dev/null || true
+    
+    ip -6 rule add fwmark "$MARK_VALUE6" table "$TABLE_ID" pref "$TABLE_ID"
+    ip -6 route add local ::/0 dev lo table "$TABLE_ID"
+    echo 1 > /proc/sys/net/ipv6/conf/all/forwarding
+    
+    log "Info" "IPv6 路由规则设置完成"
+}
+
+cleanup_routing4() {
+    log "Info" "清理 IPv4 路由规则..."
+    ip rule del fwmark "$MARK_VALUE" table "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
+    ip route del local 0.0.0.0/0 dev lo table "$TABLE_ID" 2>/dev/null || true
+    echo 0 > /proc/sys/net/ipv4/ip_forward 2>/dev/null || true
+    log "Info" "IPv4 路由规则清理完成"
+}
+
+cleanup_routing6() {
+    log "Info" "清理 IPv6 路由规则..."
+    ip -6 rule del fwmark "$MARK_VALUE6" table "$TABLE_ID" pref "$TABLE_ID" 2>/dev/null || true
+    ip -6 route del local ::/0 dev lo table "$TABLE_ID" 2>/dev/null || true
+    echo 0 > /proc/sys/net/ipv6/conf/all/forwarding 2>/dev/null || true
+    log "Info" "IPv6 路由规则清理完成"
+}
+
+setup_tproxy_chain4() {
+    log "Info" "设置 IPv4 TPROXY 规则..."
+    
+    # 创建自定义链
+    iptables -t mangle -N CLASH_PREROUTING 2>/dev/null || iptables -t mangle -F CLASH_PREROUTING
+    iptables -t mangle -N CLASH_OUTPUT 2>/dev/null || iptables -t mangle -F CLASH_OUTPUT
+    
+    # 本地地址直连
+    for subnet in 0.0.0.0/8 10.0.0.0/8 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 \
+                  192.168.0.0/16 224.0.0.0/4 240.0.0.0/4 255.255.255.255/32; do
+        iptables -t mangle -A CLASH_PREROUTING -d "$subnet" -j RETURN
+        iptables -t mangle -A CLASH_OUTPUT -d "$subnet" -j RETURN
+    done
+    
+    # DNS 劫持
+    if [ "$DNS_HIJACK_ENABLE" -eq 1 ]; then
+        iptables -t mangle -A CLASH_PREROUTING -p tcp --dport 53 -j TPROXY --on-port "$PROXY_TCP_PORT" --tproxy-mark "$MARK_VALUE"
+        iptables -t mangle -A CLASH_PREROUTING -p udp --dport 53 -j TPROXY --on-port "$PROXY_UDP_PORT" --tproxy-mark "$MARK_VALUE"
+        iptables -t mangle -A CLASH_OUTPUT -p tcp --dport 53 -j MARK --set-mark "$MARK_VALUE"
+        iptables -t mangle -A CLASH_OUTPUT -p udp --dport 53 -j MARK --set-mark "$MARK_VALUE"
+    fi
+    
+    # TCP 透明代理
+    if [ "$PROXY_TCP" -eq 1 ]; then
+        iptables -t mangle -A CLASH_PREROUTING -p tcp -j TPROXY --on-port "$PROXY_TCP_PORT" --tproxy-mark "$MARK_VALUE"
+        iptables -t mangle -A CLASH_OUTPUT -p tcp -j MARK --set-mark "$MARK_VALUE"
+    fi
+    
+    # UDP 透明代理
+    if [ "$PROXY_UDP" -eq 1 ]; then
+        iptables -t mangle -A CLASH_PREROUTING -p udp -j TPROXY --on-port "$PROXY_UDP_PORT" --tproxy-mark "$MARK_VALUE"
+        iptables -t mangle -A CLASH_OUTPUT -p udp -j MARK --set-mark "$MARK_VALUE"
+    fi
+    
+    # 应用规则
+    iptables -t mangle -I PREROUTING -j CLASH_PREROUTING
+    iptables -t mangle -I OUTPUT -j CLASH_OUTPUT
+    
+    log "Info" "IPv4 TPROXY 规则设置完成"
+}
+
+setup_tproxy_chain6() {
+    log "Info" "设置 IPv6 TPROXY 规则..."
+    
+    # 创建自定义链
+    ip6tables -t mangle -N CLASH_PREROUTING 2>/dev/null || ip6tables -t mangle -F CLASH_PREROUTING
+    ip6tables -t mangle -N CLASH_OUTPUT 2>/dev/null || ip6tables -t mangle -F CLASH_OUTPUT
+    
+    # 本地地址直连
+    for subnet in ::/128 ::1/128 ::ffff:0:0/96 fe80::/10 ff00::/8; do
+        ip6tables -t mangle -A CLASH_PREROUTING -d "$subnet" -j RETURN
+        ip6tables -t mangle -A CLASH_OUTPUT -d "$subnet" -j RETURN
+    done
+    
+    # DNS 劫持
+    if [ "$DNS_HIJACK_ENABLE" -eq 1 ]; then
+        ip6tables -t mangle -A CLASH_PREROUTING -p tcp --dport 53 -j TPROXY --on-port "$PROXY_TCP_PORT" --tproxy-mark "$MARK_VALUE6"
+        ip6tables -t mangle -A CLASH_PREROUTING -p udp --dport 53 -j TPROXY --on-port "$PROXY_UDP_PORT" --tproxy-mark "$MARK_VALUE6"
+        ip6tables -t mangle -A CLASH_OUTPUT -p tcp --dport 53 -j MARK --set-mark "$MARK_VALUE6"
+        ip6tables -t mangle -A CLASH_OUTPUT -p udp --dport 53 -j MARK --set-mark "$MARK_VALUE6"
+    fi
+    
+    # TCP 透明代理
+    if [ "$PROXY_TCP" -eq 1 ]; then
+        ip6tables -t mangle -A CLASH_PREROUTING -p tcp -j TPROXY --on-port "$PROXY_TCP_PORT" --tproxy-mark "$MARK_VALUE6"
+        ip6tables -t mangle -A CLASH_OUTPUT -p tcp -j MARK --set-mark "$MARK_VALUE6"
+    fi
+    
+    # UDP 透明代理
+    if [ "$PROXY_UDP" -eq 1 ]; then
+        ip6tables -t mangle -A CLASH_PREROUTING -p udp -j TPROXY --on-port "$PROXY_UDP_PORT" --tproxy-mark "$MARK_VALUE6"
+        ip6tables -t mangle -A CLASH_OUTPUT -p udp -j MARK --set-mark "$MARK_VALUE6"
+    fi
+    
+    # 应用规则
+    ip6tables -t mangle -I PREROUTING -j CLASH_PREROUTING
+    ip6tables -t mangle -I OUTPUT -j CLASH_OUTPUT
+    
+    log "Info" "IPv6 TPROXY 规则设置完成"
+}
+
+cleanup_tproxy_chain4() {
+    log "Info" "清理 IPv4 TPROXY 规则..."
+    
+    iptables -t mangle -D PREROUTING -j CLASH_PREROUTING 2>/dev/null || true
+    iptables -t mangle -D OUTPUT -j CLASH_OUTPUT 2>/dev/null || true
+    iptables -t mangle -F CLASH_PREROUTING 2>/dev/null || true
+    iptables -t mangle -X CLASH_PREROUTING 2>/dev/null || true
+    iptables -t mangle -F CLASH_OUTPUT 2>/dev/null || true
+    iptables -t mangle -X CLASH_OUTPUT 2>/dev/null || true
+    
+    log "Info" "IPv4 TPROXY 规则清理完成"
+}
+
+cleanup_tproxy_chain6() {
+    log "Info" "清理 IPv6 TPROXY 规则..."
+    
+    ip6tables -t mangle -D PREROUTING -j CLASH_PREROUTING 2>/dev/null || true
+    ip6tables -t mangle -D OUTPUT -j CLASH_OUTPUT 2>/dev/null || true
+    ip6tables -t mangle -F CLASH_PREROUTING 2>/dev/null || true
+    ip6tables -t mangle -X CLASH_PREROUTING 2>/dev/null || true
+    ip6tables -t mangle -F CLASH_OUTPUT 2>/dev/null || true
+    ip6tables -t mangle -X CLASH_OUTPUT 2>/dev/null || true
+    
+    log "Info" "IPv6 TPROXY 规则清理完成"
+}
+
+# 检查内核是否在运行
+is_core_running() {
+    ps -ef | grep -- 'Clash.Core -d' | grep -vE 'inotifyd|grep' > /dev/null 2>&1
+}
+
+start_core() {
+    if ! is_core_running; then
+        nohup $Module_dir/Proxy/Clash.Core -d $Module_dir/Proxy > $sdcard_dir/内核日志.txt 2>&1 &
+        sleep 2
+        echo "Clash 内核已启动"
+    else
+        echo "Clash 内核正在运行中"
+    fi
+}
+
+stop_core() {
+    if is_core_running; then
+        pid=$(pgrep -f 'Clash.Core -d' 2>/dev/null | head -n 1)
+        if [ -n "$pid" ]; then
+            kill -15 $pid 2>/dev/null
+            echo "Clash 内核已关闭"
+        else
+            echo "无法获取内核进程 ID"
+        fi
+    else
+        echo "Clash 内核未在运行"
+    fi
+}
+
+start() {
+    log "Info" "启动 TPROXY 模式..."
+    
+    # 检查 TPROXY 支持
+    if ! check_tproxy_support; then
+        log "Error" "内核不支持 TPROXY，请使用 TUN 模式"
+        exit 1
+    fi
+    
+    # 启动内核
+    start_core
+    
+    # 设置 IPv4 规则
+    setup_routing4
+    setup_tproxy_chain4
+    
+    # 设置 IPv6 规则
+    if [ "$PROXY_IPV6" -eq 1 ]; then
+        setup_routing6
+        setup_tproxy_chain6
+    fi
+    
+    log "Info" "TPROXY 模式启动完成"
+}
+
+stop() {
+    log "Info" "停止 TPROXY 模式..."
+    
+    # 清理 IPv4 规则
+    cleanup_tproxy_chain4
+    cleanup_routing4
+    
+    # 清理 IPv6 规则
+    if [ "$PROXY_IPV6" -eq 1 ]; then
+        cleanup_tproxy_chain6
+        cleanup_routing6
+    fi
+    
+    # 停止内核
+    stop_core
+    
+    log "Info" "TPROXY 模式已停止"
+}
+
+# 加载配置
+load_config
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        log "Info" "重启 TPROXY 模式..."
+        stop
+        sleep 2
+        start
+        log "Info" "TPROXY 模式重启完成"
+        ;;
+    *)
+        echo "使用方法: $0 {start|stop|restart}"
+        echo "  start   - 启动 TPROXY 透明代理"
+        echo "  stop    - 停止 TPROXY 透明代理"
+        echo "  restart - 重启 TPROXY 透明代理"
+        exit 1
+        ;;
+esac
