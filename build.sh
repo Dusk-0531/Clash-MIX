@@ -59,25 +59,26 @@ EXCLUDES=(
   "__pycache__/*"
 )
 
+validate_buildignore_line() {
+  local entry="$1"
+  [[ "$entry" =~ ^[[:space:]]*$ ]] && return 1
+  case "$entry" in
+    \#*) return 1 ;;
+  esac
+  if [[ "$entry" == /* || "$entry" == ../* || "$entry" == */../* || "$entry" == *../* || "$entry" == *//* || "$entry" == ~* || "$entry" == '*/..'* || "$entry" == .. ]]; then
+    echo "Invalid .buildignore entry: $entry"
+    exit 1
+  fi
+  EXCLUDES+=("$entry")
+}
+
 if [ -f "$ROOT_DIR/.buildignore" ]; then
   while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
-    case "$line" in
-      \#*) continue ;;
-    esac
-    if [[ "$line" == /* || "$line" == ../* || "$line" == */../* || "$line" == *../* || "$line" == *//* || "$line" == ~* || "$line" == '*/..'* || "$line" == .. ]]; then
-      echo "Invalid .buildignore entry: $line"
-      exit 1
-    fi
-    EXCLUDES+=("$line")
+    validate_buildignore_line "$line" || continue
   done < "$ROOT_DIR/.buildignore"
 fi
 
 echo "Building Magisk module package..."
-if [ ${#EXCLUDES[@]} -gt 0 ]; then
-  ZIP_ARGS=("-x" "${EXCLUDES[@]}")
-else
-  ZIP_ARGS=()
-fi
+ZIP_ARGS=("-x" "${EXCLUDES[@]}")
 zip -r9 "$OUTPUT_DIR/$ZIP_NAME" . "${ZIP_ARGS[@]}"
 echo "Package created: $OUTPUT_DIR/$ZIP_NAME"
